@@ -10,27 +10,49 @@ import UIKit
 import AFNetworking
 import MBProgressHUD
 
-class MoviesViewController: UIViewController, UICollectionViewDelegate, UICollectionViewDataSource{
+class MoviesViewController: UIViewController, UICollectionViewDelegate, UICollectionViewDataSource, UISearchBarDelegate{
     
     @IBOutlet weak var collectionView: UICollectionView!
     
     @IBOutlet weak var errorButton: UIButton!
-
+    
+    //var navigationItem: UINavigationItem!
+    
+    //var searchBar : UISearchBar!
     var movies: [NSDictionary]?
     
+    var endpoint: String!
+    lazy var searchBar = UISearchBar(frame: CGRectMake(0, 0, 290, 20))
+
     override func viewDidLoad() {
         super.viewDidLoad()
         
+        //searchBar = UISearchBar(frame: CGRectMake(0, 0, 200, 20))
+        
+        searchBar.delegate = self
+        searchBar.placeholder = "Search"
+        
+        navigationItem.leftBarButtonItem = UIBarButtonItem(customView:searchBar)
+        
         errorButton.hidden = true
+        
         let refreshControl = UIRefreshControl()
         refreshControl.addTarget(self, action: "refreshControlAction:", forControlEvents: UIControlEvents.ValueChanged)
         collectionView.insertSubview(refreshControl, atIndex: 0)
-
+        
         collectionView.dataSource = self
         collectionView.delegate = self
         
+        
+        networkRequest()
+    }
+    
+    var moviedata: NSData!
+    
+    func networkRequest(){
+        
         let apiKey = "a07e22bc18f5cb106bfe4cc1f83ad8ed"
-        let url = NSURL(string: "https://api.themoviedb.org/3/movie/now_playing?api_key=\(apiKey)")
+        let url = NSURL(string: "https://api.themoviedb.org/3/movie/\(endpoint)?api_key=\(apiKey)")
         let request = NSURLRequest(URL: url!)
         let session = NSURLSession(
             configuration: NSURLSessionConfiguration.defaultSessionConfiguration(),
@@ -40,8 +62,6 @@ class MoviesViewController: UIViewController, UICollectionViewDelegate, UICollec
         
         MBProgressHUD.showHUDAddedTo(self.view, animated: true)
         
-        collectionView.insertSubview(refreshControl, atIndex: 0)
-        
         let task: NSURLSessionDataTask = session.dataTaskWithRequest(request,
             completionHandler: { (dataOrNil, response, error) in
                 if let data = dataOrNil {
@@ -49,22 +69,37 @@ class MoviesViewController: UIViewController, UICollectionViewDelegate, UICollec
                         data, options:[]) as? NSDictionary {
                             NSLog("response: \(responseDictionary)")
                             self.moviedata = data
-                    self.movies = responseDictionary["results"] as! [NSDictionary]
-                    self.collectionView.reloadData()
-                    self.errorButton.hidden = true
-                    MBProgressHUD.hideHUDForView(self.view, animated: true)
-                        
+                            self.movies = responseDictionary["results"] as! [NSDictionary]
+                            self.collectionView.reloadData()
+                            self.errorButton.hidden = true
+                            MBProgressHUD.hideHUDForView(self.view, animated: true)
+                            
+                            var MovieTitles: [String] = []
+                            var MoviePosters: [String] = []
+                            for var index = 0; index < self.movies!.count; ++index {
+                                let MovieInfo = self.movies![index] as NSDictionary
+                                MovieTitles.append(MovieInfo["title"] as! String)
+                                MoviePosters.append(MovieInfo["poster_path"] as! String)
+                            }
+                            self.data = MovieTitles
+                            self.filteredData = self.data
+                            
+                            self.posterData=MoviePosters
+                            self.filteredPosters = self.posterData
+                            
+
                     }
                 }
                 else{
                     MBProgressHUD.hideHUDForView(self.view, animated: true)
                     self.errorButton.hidden = false
                 }
+                self.filteredMovies = self.movies
+
         })
         task.resume()
+
     }
-    
-    var moviedata: NSData!
     
 
     func refreshControlAction(refreshControl: UIRefreshControl) {
@@ -96,9 +131,11 @@ class MoviesViewController: UIViewController, UICollectionViewDelegate, UICollec
     }
     
     func collectionView(collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
-        if let movies = movies{
-            return movies.count
-        }else{
+        if let filteredData = filteredData {
+            //NetworkErrorLabel.hidden = true
+            return filteredData.count
+        } else {
+            //NetworkErrorLabel.hidden = false
             return 0
         }
     }
@@ -106,13 +143,10 @@ class MoviesViewController: UIViewController, UICollectionViewDelegate, UICollec
     
     func collectionView(collectionView: UICollectionView, cellForItemAtIndexPath indexPath: NSIndexPath) -> UICollectionViewCell {
         let cell = collectionView.dequeueReusableCellWithReuseIdentifier("MovieIdentifier", forIndexPath: indexPath) as! MovieCell
-        
-        let movie = movies![indexPath.row]
-        
-        if let posterPath = movie["poster_path"] as? String{
-        
+        let posterPath = filteredPosters[indexPath.item]
+        print(posterPath)
         let posterBaseUrl = "http://image.tmdb.org/t/p/w500"
-            let imageURL = NSURL(string: posterBaseUrl + posterPath)
+        let imageURL = NSURL(string: posterBaseUrl + posterPath)
         
         let imageRequest = NSURLRequest(URL: imageURL!)
 
@@ -123,66 +157,90 @@ class MoviesViewController: UIViewController, UICollectionViewDelegate, UICollec
                 
                 // imageResponse will be nil if the image is cached
                 if imageResponse != nil {
-                    print("Image was NOT cached, fade in image")
                     cell.movieImage.alpha = 0.0
                     cell.movieImage.image = image
                     UIView.animateWithDuration(0.3, animations: { () -> Void in
                         cell.movieImage.alpha = 1.0
                     })
                 } else {
-                    print("Image was cached so just update the image")
                     cell.movieImage.image = image
                 }
             },
             failure: { (imageRequest, imageResponse, error) -> Void in
                 // do something for the failure condition
         })
-        }
+        
         
         return cell
     }
     
     @IBAction func networkError(sender: AnyObject) {
-        MBProgressHUD.showHUDAddedTo(self.view, animated: true)
-        let apiKey = "a07e22bc18f5cb106bfe4cc1f83ad8ed"
-        let url = NSURL(string: "https://api.themoviedb.org/3/movie/now_playing?api_key=\(apiKey)")
-        let request = NSURLRequest(URL: url!)
-        let session = NSURLSession(
-            configuration: NSURLSessionConfiguration.defaultSessionConfiguration(),
-            delegate: nil,
-            delegateQueue: NSOperationQueue.mainQueue()
-        )
-        let task: NSURLSessionDataTask = session.dataTaskWithRequest(request,
-            completionHandler: { (dataOrNil, response, error) in
-                if let data = dataOrNil {
-                    if let responseDictionary = try! NSJSONSerialization.JSONObjectWithData(
-                        data, options:[]) as? NSDictionary {
-                            NSLog("response: \(responseDictionary)")
-                            self.moviedata = data
-                            self.movies = responseDictionary["results"] as! [NSDictionary]
-                            self.collectionView.reloadData()
-                            self.errorButton.hidden = true
-                            MBProgressHUD.hideHUDForView(self.view, animated: true)
-                            
-                    }
-                }
-                else{
-                    MBProgressHUD.hideHUDForView(self.view, animated: true)
-                    self.errorButton.hidden = false
-                }
-        })
-        task.resume()
+        networkRequest()
     }
 
-    
-    
+    var data: [String]?
+    var posterData: [String]?
+    var filteredData: [String]!
+    var filteredPosters: [String]!
+    var totalIndexes: [Int]?
+    var filteredMovies: [NSDictionary]?
 
+    
+    func searchBar(searchBar: UISearchBar, textDidChange searchText: String) {
+        // When there is no text, filteredData is the same as the original data
+        if searchText.isEmpty {
+            filteredData = data
+            filteredPosters = posterData
+            filteredMovies = movies
+            
+        } else {
+            // The user has entered text into the search box
+            // Use the filter method to iterate over all items in the data array
+            // For each item, return true if the item should be included and false if the
+            // item should NOT be included
+            
+            
+            var tempTitleList: [String] = []
+            var tempPosterList: [String] = []
+            var tempIndexList: [Int] = []
+            var tempMovieList: [NSDictionary] = []
+
+            // Go through each element in data
+            for var filterIndex = 0; filterIndex < data!.count; ++filterIndex {
+                
+                // For each that matches the filter
+                
+                if data![filterIndex].lowercaseString.containsString(searchText) {
+                    // Add index to temporary list
+                    tempPosterList.append(posterData![filterIndex])
+                    tempTitleList.append(data![filterIndex])
+                    tempIndexList.append(filterIndex)
+                    tempMovieList.append(movies![filterIndex])
+                    
+                                    }
+            }
+
+            // Change filtered list to temporary list
+            filteredData = tempTitleList
+            filteredPosters = tempPosterList
+            filteredMovies = tempMovieList
+
+        }
+        collectionView.reloadData()
+    }
+    func searchBarTextDidBeginEditing(searchBar: UISearchBar) {
+        //self.searchBar.showsCancelButton = true
+    }
+    func searchBarCancelButtonClicked(searchBar: UISearchBar) {
+        self.searchBar.showsCancelButton = false
+        self.searchBar.text = ""
+        self.searchBar.resignFirstResponder()
+    }
 
     override func prepareForSegue(segue: UIStoryboardSegue, sender: AnyObject?) {
         let cell = sender as! UICollectionViewCell
         let indexPath = collectionView.indexPathForCell(cell)
-        let movie = movies![indexPath!.row]
-        
+        let movie = filteredMovies![indexPath!.item]
         let detailViewController = segue.destinationViewController as! DetailViewController
         detailViewController.movie = movie
     }
