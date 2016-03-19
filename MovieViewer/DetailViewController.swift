@@ -21,13 +21,18 @@ class DetailViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         
-        scrollView.contentSize = CGSize(width: scrollView.frame.size.width, height: infoView.frame.origin.y + infoView.frame.size.height + 50)
+        let overview = movie["overview"]
+        let firstHeight = overviewLabel.frame.size.height
+        overviewLabel.text = overview as? String
+        overviewLabel.sizeToFit()
+        
+        infoView.frame.size.height += overviewLabel.frame.size.height - firstHeight
+        
+        scrollView.contentSize = CGSize(width: scrollView.frame.size.width, height: infoView.frame.origin.y + overviewLabel.frame.size.height + 120)
         
         let title = movie["title"] as? String
         titleLabel.text = title
-        let overview = movie["overview"]
-        overviewLabel.text = overview as? String
-        overviewLabel.sizeToFit()
+        
         if let posterPath = movie["poster_path"] as? String{
             
             let posterBaseUrl = "http://image.tmdb.org/t/p/w500"

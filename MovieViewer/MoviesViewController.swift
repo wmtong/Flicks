@@ -27,8 +27,6 @@ class MoviesViewController: UIViewController, UICollectionViewDelegate, UICollec
     override func viewDidLoad() {
         super.viewDidLoad()
         
-        //searchBar = UISearchBar(frame: CGRectMake(0, 0, 200, 20))
-        
         searchBar.delegate = self
         searchBar.placeholder = "Search"
         
@@ -39,7 +37,6 @@ class MoviesViewController: UIViewController, UICollectionViewDelegate, UICollec
         let refreshControl = UIRefreshControl()
         refreshControl.addTarget(self, action: "refreshControlAction:", forControlEvents: UIControlEvents.ValueChanged)
         collectionView.insertSubview(refreshControl, atIndex: 0)
-        
         collectionView.dataSource = self
         collectionView.delegate = self
         
@@ -86,8 +83,6 @@ class MoviesViewController: UIViewController, UICollectionViewDelegate, UICollec
                             
                             self.posterData=MoviePosters
                             self.filteredPosters = self.posterData
-                            
-
                     }
                 }
                 else{
@@ -144,30 +139,70 @@ class MoviesViewController: UIViewController, UICollectionViewDelegate, UICollec
     func collectionView(collectionView: UICollectionView, cellForItemAtIndexPath indexPath: NSIndexPath) -> UICollectionViewCell {
         let cell = collectionView.dequeueReusableCellWithReuseIdentifier("MovieIdentifier", forIndexPath: indexPath) as! MovieCell
         let posterPath = filteredPosters[indexPath.item]
-        print(posterPath)
-        let posterBaseUrl = "http://image.tmdb.org/t/p/w500"
-        let imageURL = NSURL(string: posterBaseUrl + posterPath)
+        let smallBaseUrl = "https://image.tmdb.org/t/p/w45"
+        let largeBaseUrl = "https://image.tmdb.org/t/p/w342"
+        let smallImageUrl = NSURL(string: smallBaseUrl+posterPath)
+        let largeImageUrl = NSURL(string: largeBaseUrl+posterPath)
+        let smallImageRequest = NSURLRequest(URL: smallImageUrl!)
+        let largeImageRequest = NSURLRequest(URL: largeImageUrl!)
         
-        let imageRequest = NSURLRequest(URL: imageURL!)
+        cell.backgroundColor = UIColor.blackColor()
 
         cell.movieImage.setImageWithURLRequest(
-            imageRequest,
+            smallImageRequest,
             placeholderImage: nil,
-            success: { (imageRequest, imageResponse, image) -> Void in
+            success: { (smallImageRequest, smallImageResponse, smallImage) -> Void in
                 
                 // imageResponse will be nil if the image is cached
-                if imageResponse != nil {
+                if smallImageResponse != nil {
                     cell.movieImage.alpha = 0.0
-                    cell.movieImage.image = image
-                    UIView.animateWithDuration(0.3, animations: { () -> Void in
+                    cell.movieImage.image = smallImage
+                    UIView.animateWithDuration(0.2, animations: { () -> Void in
                         cell.movieImage.alpha = 1.0
-                    })
+                        },completion: {
+                            (sucess) -> Void in
+                            // The AFNetworking ImageView Category only allows one request to be sent at a time
+                            // per ImageView. This code must be in the completion block.
+                            cell.movieImage.setImageWithURLRequest(
+                                largeImageRequest,
+                                placeholderImage: smallImage,
+                                success: { (largeImageRequest, largeImageResponse, largeImage) -> Void in
+                                    cell.movieImage.image = largeImage;
+                                },
+                                failure: { (request, response, error) -> Void in
+                                    cell.movieImage.image = UIImage(named: "error")
+                                    
+                            })
+                        }
+                    )
                 } else {
-                    cell.movieImage.image = image
+                    cell.movieImage.alpha = 0.0
+                    cell.movieImage.image = smallImage
+                    UIView.animateWithDuration(
+                        0.2, animations: {
+                            () -> Void in
+                            cell.movieImage.alpha = 1.0
+                        }, completion: {
+                            (sucess) -> Void in
+                            // The AFNetworking ImageView Category only allows one request to be sent at a time
+                            // per ImageView. This code must be in the completion block.
+                            cell.movieImage.setImageWithURLRequest(
+                                largeImageRequest,
+                                placeholderImage: smallImage,
+                                success: { (largeImageRequest, largeImageResponse, largeImage) -> Void in
+                                    cell.movieImage.image = largeImage;
+                                },
+                                failure: { (request, response, error) -> Void in
+                                    cell.movieImage.image = UIImage(named: "error")
+                                    
+                                }
+                            )
+                        }
+                    )
                 }
             },
             failure: { (imageRequest, imageResponse, error) -> Void in
-                // do something for the failure condition
+                cell.movieImage.image = UIImage(named: "error")
         })
         
         
@@ -186,7 +221,7 @@ class MoviesViewController: UIViewController, UICollectionViewDelegate, UICollec
     var filteredMovies: [NSDictionary]?
 
     
-    func searchBar(searchBar: UISearchBar, textDidChange searchText: String) {
+    func searchBar(searchBar: UISearchBar, var textDidChange searchText: String) {
         // When there is no text, filteredData is the same as the original data
         if searchText.isEmpty {
             filteredData = data
@@ -204,6 +239,8 @@ class MoviesViewController: UIViewController, UICollectionViewDelegate, UICollec
             var tempPosterList: [String] = []
             var tempIndexList: [Int] = []
             var tempMovieList: [NSDictionary] = []
+            
+            searchText = searchText.lowercaseString
 
             // Go through each element in data
             for var filterIndex = 0; filterIndex < data!.count; ++filterIndex {
@@ -229,7 +266,7 @@ class MoviesViewController: UIViewController, UICollectionViewDelegate, UICollec
         collectionView.reloadData()
     }
     func searchBarTextDidBeginEditing(searchBar: UISearchBar) {
-        //self.searchBar.showsCancelButton = true
+        self.searchBar.showsCancelButton = true
     }
     func searchBarCancelButtonClicked(searchBar: UISearchBar) {
         self.searchBar.showsCancelButton = false
